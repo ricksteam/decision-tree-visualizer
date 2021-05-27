@@ -1,4 +1,5 @@
-|--- feature_0 <= 0.94
+export default 
+`|--- feature_0 <= 0.94
 |   |--- feature_4 <= 0.00
 |   |   |--- feature_0 <= 0.61
 |   |   |   |--- feature_1 <= 0.79
@@ -1675,4 +1676,4 @@
 |   |   |   |   |   |--- feature_4 >  0.23
 |   |   |   |   |   |   |--- class: Good
 |   |   |   |   |--- feature_1 >  0.94
-|   |   |   |   |   |--- class: Bad
+|   |   |   |   |   |--- class: Bad`

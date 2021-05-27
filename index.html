@@ -1,0 +1,228 @@
+<html>
+
+<head>
+
+</head>
+
+<body>
+  <script src="./canvas.js"></script>
+  <script src="./decision_tree.simple.js"></script>
+  <script>
+
+    let lines = tree.split("\n");
+    console.log(lines.length)
+
+    let depthChange = 20;
+
+    //From https://stackoverflow.com/a/1072782/10047920
+    const count = (str) => {
+      const re = /\|   /g
+      return ((str || '').match(re) || []).length
+    }
+
+
+    class FeatureNode {
+      feature_left;
+      splitNumber_left;
+      splitOperator_left;
+      feature_right;
+      splitNumber_right;
+      splitOperator_right;
+      leftChild;
+      rightChild;
+      parent;
+      depth;
+    }
+
+    class Truncated {
+      depth;
+    }
+
+    class Leaf {
+      className
+    }
+
+    let root;
+    let currentNode = root;
+
+    for (let i = 0; i < lines.length; i++) {
+
+      console.log(i)
+      let line_untrimmed = lines[i];
+      let line = line_untrimmed.trim();
+      if (!line) continue;//Skip blank lines.
+      let depth = count(line);
+      console.log(depth);
+      let words = line.split(" ");
+
+      if (line.includes("truncated")) {
+        let toAdd = new Truncated();
+        toAdd.depth = +(words[words.length - 1]);
+        if (!currentNode.leftChild) {
+          currentNode.leftChild = toAdd;
+        }
+        else {
+          currentNode.rightChild = toAdd;
+        }
+        currentNode = currentNode.parent;
+      }
+
+      else if (line.includes("class: ")) {
+        let toAdd = new Leaf();
+        toAdd.className = words[words.length - 1];
+        let onLeft;
+        let parent = currentNode.parent;
+        let me = currentNode;
+        if (parent.leftChild == me)
+          onLeft = true;
+        else if (parent.rightChild == me)
+          onLeft = false;
+
+        if (onLeft) {
+          parent.leftChild = toAdd;
+        }
+        else if (!onLeft) {
+          parent.rightChild = toAdd;
+        }
+        currentNode = parent;
+      }
+
+      else {
+        //This should be a feature node
+        if (!root) {
+          root = new FeatureNode();
+          currentNode = root;
+          currentNode.depth = 0;
+        }
+        //Handle depth
+        while (depth < currentNode.depth) {
+          currentNode = currentNode.parent;
+        }
+        //let toAdd = new FeatureNode();
+        let feature = words[words.length - 3];
+        feature = feature.split("_")[1];
+        let splitNumber = words[words.length - 1];
+        let splitOperator = words[words.length - 2];
+        currentNode.depth = depth;
+
+        if (!currentNode || !currentNode.leftChild) {
+          currentNode.feature_left = feature;
+          currentNode.splitNumber_left = splitNumber;
+          currentNode.splitOperator_left = splitOperator
+        }
+        else {
+          currentNode.feature_right = feature;
+          currentNode.splitNumber_right = splitNumber;
+          currentNode.splitOperator_right = splitOperator
+        }
+        if (false) {
+          root = toAdd;
+          root.parent = null;
+          currentNode = root;
+        }
+        else {
+          if (!currentNode.leftChild) {
+            currentNode.leftChild = new FeatureNode();
+            currentNode.leftChild.parent = currentNode
+            currentNode = currentNode.leftChild;
+          }
+          else {
+            currentNode.rightChild = new FeatureNode();
+            currentNode.rightChild.parent = currentNode;
+            currentNode = currentNode.rightChild;
+          }
+
+
+
+          //currentNode = toAdd;
+        }
+
+      }
+
+    }
+
+
+    function customDraw(ctx) {
+
+      if (root) {
+        let start = -500;
+        let stop = 500;
+        let depth = 0;
+
+
+        drawNode(ctx, start, stop, depth, root);
+        if (root.leftChild instanceof FeatureNode) {//Is it a FeatureNode
+          recursiveDraw(ctx, start, (stop - start) / 2 + start, depth + 1, root.leftChild);
+        }
+        else if (root.leftChild instanceof Leaf) {
+          drawLeaf(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
+        }
+        else if (root.leftChild instanceof Truncated) {
+          drawTruncated(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
+        }
+
+        if (root.rightChild instanceof FeatureNode) {
+          recursiveDraw(ctx, (stop - start) / 2 + start, stop, depth + 1, root.rightChild);
+        }
+        else if (root.rightChild instanceof Leaf) {
+          drawLeaf(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
+        }
+        else if (root.rightChild instanceof Truncated) {
+          drawTruncated(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
+        }
+
+      }
+    }
+
+    function drawLeaf(ctx, start, stop, depth, node) {
+      ctx.fillStyle = "red";
+      if (node.className == "Good")
+        ctx.fillStyle = "green"
+      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+    }
+
+    function drawTruncate(ctx, start, stop, depth, node) {
+      ctx.fillStyle = "blue";
+      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+    }
+
+    function drawNode(ctx, start, stop, depth, node) {
+      ctx.fillStyle = "blue";
+      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+
+      ctx.fillStyle = "black"
+      let left = `${node.feature_left} ${node.splitNumber_left} ${node.splitOperator_left}`;
+      let right = `${node.feature_right} ${node.splitNumber_right} ${node.splitOperator_right}`;
+      ctx.fillText(left, start, (depth + .5) * depthChange);
+      ctx.fillText(right, (stop - start) / 2 + start, (depth + .5) * depthChange);
+    }
+
+    function recursiveDraw(ctx, start, stop, depth, node) {
+
+      drawNode(ctx, start, stop, depth, node);
+
+      if (node.leftChild instanceof FeatureNode) {//Is it a FeatureNode
+        recursiveDraw(ctx, start, (stop - start) / 2 + start, depth + 1, node.leftChild);
+      }
+      else if (node.leftChild instanceof Leaf) {
+        drawLeaf(ctx, start, (stop - start) / 2 + start, depth + 1, node.leftChild);
+      }
+      else if (node.leftChild instanceof Truncated) {
+        drawTruncated(ctx, start, (stop - start) / 2 + start, depth + 1, node.leftChild);
+      }
+
+      if (node.rightChild instanceof FeatureNode) {
+        recursiveDraw(ctx, (stop - start) / 2 + start, stop, depth + 1, node.rightChild);
+      }
+      else if (node.rightChild instanceof Leaf) {
+        drawLeaf(ctx, (stop - start) / 2 + start, stop, depth + 1, node.rightChild);
+      }
+      else if (node.rightChild instanceof Truncated) {
+        drawTruncated(ctx, (stop - start) / 2 + start, stop, depth + 1, node.rightChild);
+      }
+
+    }
+  </script>
+</body>
+
+</html>
