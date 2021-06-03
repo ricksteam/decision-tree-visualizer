@@ -9,67 +9,93 @@
   <script src="./decision_tree.simple.js"></script>
   <script>
 
-    let lines = tree.split("\n");
-    console.log(lines.length)
 
-    let depthChange = 20;
 
+
+    //The height of each row in our tree
+    let rowHeight = 20;
+
+    //Count the number of |s in a string
     //From https://stackoverflow.com/a/1072782/10047920
     const count = (str) => {
       const re = /\|   /g
       return ((str || '').match(re) || []).length
     }
 
+    //Parse the file.
+    //Start by creating the correct data structures
 
+
+    //A node in our tree
     class FeatureNode {
-      feature_left;
-      splitNumber_left;
-      splitOperator_left;
-      feature_right;
-      splitNumber_right;
-      splitOperator_right;
-      leftChild;
-      rightChild;
-      parent;
-      depth;
+      feature_left;   //The name of the left feature. Should match feature_right
+      feature_right;  //The name of the right feature. Should match feature_left
+
+      splitNumber_left;     //The number used as a threshold on the left. 
+      splitOperator_left;   //The operator used on the left (<,<=,>,>=)
+      splitNumber_right;    //The number used as a threshold on the right
+      splitOperator_right;  //The operator used on the left (<,<=,>,>=)
+
+      leftChild;  //Pointer to the left child in the binary tree
+      rightChild; //Pointer to the right childe in the binary tree
+      parent;     //Back link to this node's parent
+
+      depth;  //How deep in the binary tree this node is
     }
 
+    //A truncated node in our tree
     class Truncated {
       depth;
     }
 
+    //A leaf not in our tree
     class Leaf {
       className
     }
 
+    //Reference to the root of the tree
     let root;
+
+    //The current node in the tree as we parse the text file
     let currentNode = root;
 
-    for (let i = 0; i < lines.length; i++) {
 
-      console.log(i)
+    //The actual parsing
+    //Get each line in an array
+    let lines = tree.split("\n");
+    //Go through each line and parse it into our tree
+    for (let i = 0; i < lines.length; i++) {
       let line_untrimmed = lines[i];
       let line = line_untrimmed.trim();
       if (!line) continue;//Skip blank lines.
-      let depth = count(line);
-      console.log(depth);
+      let depth = count(line);//Count the number of |s
+
+      //Get the space delimited words in the line
       let words = line.split(" ");
 
+      //Put in a special node if the line includes "truncated"
       if (line.includes("truncated")) {
         let toAdd = new Truncated();
         toAdd.depth = +(words[words.length - 1]);
+
+        //If there is no left node, this goes on the left...
         if (!currentNode.leftChild) {
           currentNode.leftChild = toAdd;
         }
+        //...otherwise this goes on the right
         else {
           currentNode.rightChild = toAdd;
         }
+        //Since truncate is a terminal node, go back up in the hierarchy
         currentNode = currentNode.parent;
       }
 
+      //Put in a special node if this in a leaf node.
       else if (line.includes("class: ")) {
         let toAdd = new Leaf();
         toAdd.className = words[words.length - 1];
+
+        //Check to see if this node belongs on the left or right of the parent.
         let onLeft;
         let parent = currentNode.parent;
         let me = currentNode;
@@ -84,27 +110,31 @@
         else if (!onLeft) {
           parent.rightChild = toAdd;
         }
+        //Since leafs are terminal nodes, go back up in the heirarchy
         currentNode = parent;
       }
 
+      //This should be a feature node
       else {
-        //This should be a feature node
+        //If there is no root node, create one.
         if (!root) {
           root = new FeatureNode();
           currentNode = root;
           currentNode.depth = 0;
         }
-        //Handle depth
+        //Handle depth changes
+        //The depth should only decrease if we need to move back up in our hierarchy
         while (depth < currentNode.depth) {
           currentNode = currentNode.parent;
         }
-        //let toAdd = new FeatureNode();
-        let feature = words[words.length - 3];
-        feature = feature.split("_")[1];
-        let splitNumber = words[words.length - 1];
-        let splitOperator = words[words.length - 2];
-        currentNode.depth = depth;
 
+        let feature = words[words.length - 3];
+        feature = feature.split("_")[1];//Split the feature name into a string and number
+        let splitNumber = words[words.length - 1];//Get the threshold number
+        let splitOperator = words[words.length - 2]; //Get the threshold operator
+        currentNode.depth = depth; //Set the depth
+
+        //Check if these should be placed on the left or right
         if (!currentNode || !currentNode.leftChild) {
           currentNode.feature_left = feature;
           currentNode.splitNumber_left = splitNumber;
@@ -115,92 +145,106 @@
           currentNode.splitNumber_right = splitNumber;
           currentNode.splitOperator_right = splitOperator
         }
-        if (false) {
-          root = toAdd;
-          root.parent = null;
-          currentNode = root;
+
+        //Recurse based on whether we are a left or right node.
+        if (!currentNode.leftChild) {
+          currentNode.leftChild = new FeatureNode();
+          currentNode.leftChild.parent = currentNode
+          currentNode = currentNode.leftChild;
         }
         else {
-          if (!currentNode.leftChild) {
-            currentNode.leftChild = new FeatureNode();
-            currentNode.leftChild.parent = currentNode
-            currentNode = currentNode.leftChild;
-          }
-          else {
-            currentNode.rightChild = new FeatureNode();
-            currentNode.rightChild.parent = currentNode;
-            currentNode = currentNode.rightChild;
-          }
-
-
-
-          //currentNode = toAdd;
+          currentNode.rightChild = new FeatureNode();
+          currentNode.rightChild.parent = currentNode;
+          currentNode = currentNode.rightChild;
         }
 
       }
-
     }
 
 
     function customDraw(ctx) {
+      //Don't draw if we haven't parsed yet
+      if (!root) return;
 
-      if (root) {
-        let start = -500;
-        let stop = 500;
-        let depth = 0;
+      let start = -500;
+      let stop = 500;
+      let depth = 0;
 
+      //Draw the root node
+      drawNode(ctx, start, stop, depth, root);
 
-        drawNode(ctx, start, stop, depth, root);
-        if (root.leftChild instanceof FeatureNode) {//Is it a FeatureNode
-          recursiveDraw(ctx, start, (stop - start) / 2 + start, depth + 1, root.leftChild);
-        }
-        else if (root.leftChild instanceof Leaf) {
-          drawLeaf(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
-        }
-        else if (root.leftChild instanceof Truncated) {
-          drawTruncated(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
-        }
+      //Draw the node on the left
+      //Is it a FeatureNode?
+      if (root.leftChild instanceof FeatureNode) {
+        recursiveDraw(ctx, start, (stop - start) / 2 + start, depth + 1, root.leftChild);
+      }
+      //Is it a Leaf Node?
+      else if (root.leftChild instanceof Leaf) {
+        drawLeaf(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
+      }
+      //Is it a Truncated Node?
+      else if (root.leftChild instanceof Truncated) {
+        drawTruncated(ctx, start, (stop - start) / 2 + start, depth, root.leftChild);
+      }
 
-        if (root.rightChild instanceof FeatureNode) {
-          recursiveDraw(ctx, (stop - start) / 2 + start, stop, depth + 1, root.rightChild);
-        }
-        else if (root.rightChild instanceof Leaf) {
-          drawLeaf(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
-        }
-        else if (root.rightChild instanceof Truncated) {
-          drawTruncated(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
-        }
-
+      //Draw the node on the right
+      if (root.rightChild instanceof FeatureNode) {
+        recursiveDraw(ctx, (stop - start) / 2 + start, stop, depth + 1, root.rightChild);
+      }
+      else if (root.rightChild instanceof Leaf) {
+        drawLeaf(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
+      }
+      else if (root.rightChild instanceof Truncated) {
+        drawTruncated(ctx, (stop - start) / 2 + start, stop, depth, root.rightChild);
       }
     }
 
+    //Draws a leaf node. It is colored based on the class name.
+    //TODO: We won't always have just two classes that are "Good" and "Bad"
     function drawLeaf(ctx, start, stop, depth, node) {
-      ctx.fillStyle = "red";
+      //Set the fill color based on the class name
+      ctx.fillStyle = "pink";
       if (node.className == "Good")
-        ctx.fillStyle = "green"
-      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+        ctx.fillStyle = "lightgreen"
+      
+      //Fill the rectangle using the assigned color
+      //TODO: This draws a binary tree in a full rectangle
+      //Normally, we should draw nodes as squares with lines between them.
+      ctx.fillRect(start, depth * rowHeight, stop - start, rowHeight)
+
+      //Write the text of the class name
+      ctx.fillStyle = "black"
+      ctx.fillText(node.className, (stop - start) / 2 + start, (depth + .5) * rowHeight);
     }
 
+    //Draw a truncated node
     function drawTruncate(ctx, start, stop, depth, node) {
       ctx.fillStyle = "blue";
-      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+      ctx.fillRect(start, depth * rowHeight, stop - start, rowHeight)
     }
 
+    //Draw a node w/o recursing
+    //TODO: See todo on drawLeaf
     function drawNode(ctx, start, stop, depth, node) {
-      ctx.fillStyle = "blue";
-      ctx.fillRect(start, depth * depthChange, stop - start, depthChange)
+      //Fill the rectangle
+      ctx.fillStyle = "azure";
+      ctx.fillRect(start, depth * rowHeight, stop - start, rowHeight)
 
+      //Draw the feature number, threshold, and operator
       ctx.fillStyle = "black"
       let left = `${node.feature_left} ${node.splitNumber_left} ${node.splitOperator_left}`;
       let right = `${node.feature_right} ${node.splitNumber_right} ${node.splitOperator_right}`;
-      ctx.fillText(left, start, (depth + .5) * depthChange);
-      ctx.fillText(right, (stop - start) / 2 + start, (depth + .5) * depthChange);
+      ctx.fillText(left, start, (depth + .5) * rowHeight);
+      ctx.fillText(right, (stop - start) / 2 + start, (depth + .5) * rowHeight);
     }
 
+    //Draw a node with recursion
     function recursiveDraw(ctx, start, stop, depth, node) {
 
+      //Draw the node itself
       drawNode(ctx, start, stop, depth, node);
 
+      //Draw the left node
       if (node.leftChild instanceof FeatureNode) {//Is it a FeatureNode
         recursiveDraw(ctx, start, (stop - start) / 2 + start, depth + 1, node.leftChild);
       }
@@ -211,6 +255,7 @@
         drawTruncated(ctx, start, (stop - start) / 2 + start, depth + 1, node.leftChild);
       }
 
+      //Draw right node
       if (node.rightChild instanceof FeatureNode) {
         recursiveDraw(ctx, (stop - start) / 2 + start, stop, depth + 1, node.rightChild);
       }
